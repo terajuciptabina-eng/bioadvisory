@@ -10,7 +10,7 @@
 </head>
 <body>
 <h1>BioAdvisory Rule Engine Test Suite</h1>
-<p class="muted">Automated browser checks against the actual app in <code>../index.html</code>. Version v0.1 · synthetic data only.</p>
+<p class="muted">Automated browser checks against the actual app in <code>../index.html</code>. Version v0.2 · synthetic data only.</p>
 <div class="notice"><strong>Test environment only.</strong> This page fills the prototype with synthetic test values and clicks its review button. It does not test clinical validity, privacy/security beyond the visible browser workflow, or real laboratory records.</div>
 <div class="toolbar"><button class="button" id="run">Run all tests</button><span id="progress" class="muted">Not run yet</span></div>
 <div class="summary">
@@ -44,9 +44,9 @@ function wait(ms){return new Promise(resolve=>setTimeout(resolve,ms));}
 async function runAll(){
  const button=$('run'),frame=$('app');button.disabled=true;$('results').innerHTML='';$('progress').textContent='Waiting for app…';
  try{
-  if(!frame.contentDocument || !frame.contentDocument.getElementById('run')) await new Promise((resolve,reject)=>{frame.addEventListener('load',resolve,{once:true});setTimeout(()=>reject(new Error('App iframe did not load. Check that ../index.html is available.')),8000)});
+  if(!frame.contentDocument || !frame.contentDocument.getElementById('runReview')) await new Promise((resolve,reject)=>{frame.addEventListener('load',resolve,{once:true});setTimeout(()=>reject(new Error('App iframe did not load. Check that ../index.html is available.')),8000)});
   const doc=frame.contentDocument;
-  if(!doc || !doc.getElementById('run')) throw new Error('Could not access app in iframe. The test page and app must be served from the same origin.');
+  if(!doc || !doc.getElementById('runReview')) throw new Error('Could not access app in iframe. The test page and app must be served from the same origin.');
   const results=[];
   for(let i=0;i<cases.length;i++){
    const test=cases[i];let result={...test,ok:false,detail:''};
@@ -61,9 +61,9 @@ async function runAll(){
     setValue(doc,'notes','Automated synthetic test: '+test.id);
     setValue(doc,'source','Synthetic manual entry');
     doc.getElementById('confirm').checked=true;
-    doc.getElementById('run').click();
+    doc.getElementById('runReview').click();
     await wait(25);
-    const output=doc.getElementById('out');
+    const output=doc.getElementById('labOutput');
     const text=output?output.innerText:'';
     result.ok=test.id==='R00'?text.includes('No configured flags triggered')&&!/\bR(?:0[1-9]|1[0-3])\b/.test(text):text.includes(test.expected);
     result.detail=result.ok?(test.id==='R00'?'Expected clean baseline observed.':'Expected flag '+test.expected+' found.'):(test.id==='R00'?'Expected no configured flags; output was: '+text.slice(0,240):'Expected '+test.expected+' but output was: '+text.slice(0,240));
