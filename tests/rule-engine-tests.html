@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BioAdvisory · Rule Engine Test Suite</title>
+<style>
+:root{font-family:system-ui,Arial,sans-serif;color:#183142;background:#f3f7fa}*{box-sizing:border-box}body{max-width:1100px;margin:0 auto;padding:24px 16px 48px}h1{margin-bottom:6px}.muted{color:#617583;font-size:14px}.notice{padding:12px 14px;background:#fff5dc;border:1px solid #ead49c;border-radius:10px;margin:18px 0}.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:18px 0}.button{border:0;border-radius:8px;padding:10px 14px;background:#087e8b;color:#fff;font-weight:700;cursor:pointer}.button:disabled{opacity:.6;cursor:wait}.summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:18px 0}.metric,.case{background:white;border:1px solid #d9e3e9;border-radius:10px;padding:13px}.metric strong{font-size:24px;display:block}.case{display:grid;grid-template-columns:1fr auto;gap:6px;margin:8px 0}.case p{grid-column:1/-1;margin:0;color:#617583;font-size:13px}.status{font-size:12px;font-weight:800;padding:4px 8px;border-radius:99px;align-self:start}.pass{background:#e1f5e9;color:#176747}.fail{background:#ffe8e8;color:#922d2d}.pending{background:#eaf0f3;color:#244252}iframe{position:fixed;left:-12000px;top:0;width:1200px;height:900px;border:0}@media(max-width:600px){.summary{grid-template-columns:repeat(2,minmax(0,1fr))}.case{grid-template-columns:1fr}.status{grid-row:2;justify-self:start}}
+</style>
+</head>
+<body>
+<h1>BioAdvisory Rule Engine Test Suite</h1>
+<p class="muted">Automated browser checks against the actual app in <code>../index.html</code>. Version v0.1 · synthetic data only.</p>
+<div class="notice"><strong>Test environment only.</strong> This page fills the prototype with synthetic test values and clicks its review button. It does not test clinical validity, privacy/security beyond the visible browser workflow, or real laboratory records.</div>
+<div class="toolbar"><button class="button" id="run">Run all tests</button><span id="progress" class="muted">Not run yet</span></div>
+<div class="summary">
+<div class="metric"><strong id="total">0</strong><span class="muted">Total</span></div>
+<div class="metric"><strong id="passed">0</strong><span class="muted">Passed</span></div>
+<div class="metric"><strong id="failed">0</strong><span class="muted">Failed</span></div>
+<div class="metric"><strong id="rate">—</strong><span class="muted">Pass rate</span></div>
+</div>
+<div id="results" aria-live="polite"><p class="muted">Select “Run all tests” to execute the test cases.</p></div>
+<iframe id="app" title="BioAdvisory app under test" src="../index.html"></iframe>
+<script>
+const cases = [
+ {id:'R00',name:'No configured flags on a complete, internally consistent record',expected:'No configured flags triggered',setup:{specimen:'Urine',micro:'Performed — findings recorded',culture:'Growth reported',organism:'Identified — synthetic example',ast:'Completed — result reviewed',qc:'Pass — documented'}},
+ {id:'R01',name:'Missing specimen type',expected:'R01',setup:{specimen:'',micro:'Performed — findings recorded',culture:'No growth reported',organism:'Not identified',ast:'Not indicated / not performed',qc:'Pass — documented'}},
+ {id:'R02',name:'Missing culture status',expected:'R02',setup:{specimen:'Urine',micro:'Performed — findings recorded',culture:'',organism:'Not identified',ast:'Not indicated / not performed',qc:'Pass — documented'}},
+ {id:'R03',name:'Growth reported while identification status is blank',expected:'R03',setup:{specimen:'Urine',micro:'Performed — findings recorded',culture:'Growth reported',organism:'',ast:'Pending',qc:'Pass — documented'}},
+ {id:'R04',name:'Growth reported but identification marked not identified',expected:'R04',setup:{specimen:'Urine',micro:'Performed — findings recorded',culture:'Growth reported',organism:'Not identified',ast:'Pending',qc:'Pass — documented'}},
+ {id:'R05',name:'Identification set while culture is pending',expected:'R05',setup:{specimen:'Urine',micro:'Performed — findings recorded',culture:'Pending',organism:'Identified — synthetic example',ast:'Pending',qc:'Pass — documented'}},
+ {id:'R06',name:'AST review completed but identification status blank',expected:'R06',setup:{specimen:'Urine',micro:'Performed — findings recorded',culture:'Growth reported',organism:'',ast:'Completed — result reviewed',qc:'Pass — documented'}},
+ {id:'R07',name:'AST completed but review not recorded',expected:'R07',setup:{specimen:'Urine',micro:'Performed — findings recorded',culture:'Growth reported',organism:'Identified — synthetic example',ast:'Completed — review not recorded',qc:'Pass — documented'}},
+ {id:'R08',name:'QC failure recorded',expected:'R08',setup:{specimen:'Urine',micro:'Performed — findings recorded',culture:'No growth reported',organism:'Not identified',ast:'Not indicated / not performed',qc:'Fail — documented'}},
+ {id:'R09',name:'QC status blank',expected:'R09',setup:{specimen:'Urine',micro:'Performed — findings recorded',culture:'No growth reported',organism:'Not identified',ast:'Not indicated / not performed',qc:''}},
+ {id:'R10',name:'QC explicitly marked not recorded',expected:'R10',setup:{specimen:'Urine',micro:'Performed — findings recorded',culture:'No growth reported',organism:'Not identified',ast:'Not indicated / not performed',qc:'Not recorded'}},
+ {id:'R11',name:'Microscopy performed but no findings recorded',expected:'R11',setup:{specimen:'Urine',micro:'Performed — no findings recorded',culture:'No growth reported',organism:'Not identified',ast:'Not indicated / not performed',qc:'Pass — documented'}},
+ {id:'R12',name:'Microscopy status blank',expected:'R12',setup:{specimen:'Urine',micro:'',culture:'No growth reported',organism:'Not identified',ast:'Not indicated / not performed',qc:'Pass — documented'}},
+ {id:'R13',name:'Mixed growth informational flag',expected:'R13',setup:{specimen:'Urine',micro:'Performed — findings recorded',culture:'Mixed growth reported',organism:'Not identified',ast:'Not indicated / not performed',qc:'Pass — documented'}}
+];
+const $=id=>document.getElementById(id);
+function setValue(doc,id,value){const el=doc.getElementById(id);if(!el)throw new Error('Missing app element #'+id);el.value=value;}
+function wait(ms){return new Promise(resolve=>setTimeout(resolve,ms));}
+async function runAll(){
+ const button=$('run'),frame=$('app');button.disabled=true;$('results').innerHTML='';$('progress').textContent='Waiting for app…';
+ try{
+  if(!frame.contentDocument || !frame.contentDocument.getElementById('run')) await new Promise((resolve,reject)=>{frame.addEventListener('load',resolve,{once:true});setTimeout(()=>reject(new Error('App iframe did not load. Check that ../index.html is available.')),8000)});
+  const doc=frame.contentDocument;
+  if(!doc || !doc.getElementById('run')) throw new Error('Could not access app in iframe. The test page and app must be served from the same origin.');
+  const results=[];
+  for(let i=0;i<cases.length;i++){
+   const test=cases[i];let result={...test,ok:false,detail:''};
+   try{
+    setValue(doc,'case','TEST-'+test.id);
+    setValue(doc,'specimen',test.setup.specimen);
+    setValue(doc,'micro',test.setup.micro);
+    setValue(doc,'culture',test.setup.culture);
+    setValue(doc,'organism',test.setup.organism);
+    setValue(doc,'ast',test.setup.ast);
+    setValue(doc,'qc',test.setup.qc);
+    setValue(doc,'notes','Automated synthetic test: '+test.id);
+    setValue(doc,'source','Synthetic manual entry');
+    doc.getElementById('confirm').checked=true;
+    doc.getElementById('run').click();
+    await wait(25);
+    const output=doc.getElementById('out');
+    const text=output?output.innerText:'';
+    result.ok=test.id==='R00'?text.includes('No configured flags triggered')&&!/\bR(?:0[1-9]|1[0-3])\b/.test(text):text.includes(test.expected);
+    result.detail=result.ok?(test.id==='R00'?'Expected clean baseline observed.':'Expected flag '+test.expected+' found.'):(test.id==='R00'?'Expected no configured flags; output was: '+text.slice(0,240):'Expected '+test.expected+' but output was: '+text.slice(0,240));
+   }catch(e){result.detail=e.message}
+   results.push(result);render(results,false);$('progress').textContent='Running '+(i+1)+' / '+cases.length;
+  }
+  render(results,true);const fail=results.filter(x=>!x.ok).length;$('progress').textContent=fail?'Completed with '+fail+' failure(s).':'All tests passed.';
+ }catch(e){$('progress').textContent='Test harness error: '+e.message;$('results').innerHTML='<div class="case"><strong>Harness error</strong><span class="status fail">ERROR</span><p>'+escapeHtml(e.message)+'</p></div>'}
+ finally{button.disabled=false}
+}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function render(results,done){
+ const passed=results.filter(x=>x.ok).length,failed=results.length-passed;
+ $('total').textContent=results.length;$('passed').textContent=passed;$('failed').textContent=failed;$('rate').textContent=results.length?Math.round(passed/results.length*100)+'%':'—';
+ $('results').innerHTML=results.map(x=>'<div class="case"><strong>'+escapeHtml(x.id+' · '+x.name)+'</strong><span class="status '+(x.ok?'pass':'fail')+'">'+(x.ok?'PASS':'FAIL')+'</span><p>'+escapeHtml(x.detail)+'</p></div>').join('');
+}
+$('run').addEventListener('click',runAll);
+</script>
+</body>
+</html>
